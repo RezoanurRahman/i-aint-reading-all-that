@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "I ain't reading all that",
+  "version": "0.1.0",
+  "description": "Auto-summarizes LinkedIn feed posts into a brutal TL;DR.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://api.deepseek.com/*",
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "I ain't reading all that"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/feed/*", "https://www.linkedin.com/*"],
+      "js": ["content/content.js"],
+      "css": ["fonts/fonts.css", "content/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["fonts/bricolage-latin.woff2", "fonts/spacemono-400.woff2", "fonts/spacemono-700.woff2"],
+      "matches": ["https://www.linkedin.com/*"]
+    }
+  ],
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  }
+}

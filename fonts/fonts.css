@@ -1,0 +1,27 @@
+/* Locally bundled fonts (no hot-linking, works offline, avoids LinkedIn CSP).
+   Latin subset only — the card/popup text is English/ASCII.
+   Bricolage Grotesque is a variable font (one file covers weights 600–800). */
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("bricolage-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("spacemono-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("spacemono-700.woff2") format("woff2");
+}

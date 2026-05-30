@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="../fonts/fonts.css" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup">
+    <div class="popup__head">
+      <div class="popup__brand">
+        <div class="popup__logo">I</div>
+        <div>
+          <div class="popup__title">I ain't reading<br />all that</div>
+          <div class="popup__sub">Your feed, minus the monologues.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="popup__body">
+      <!-- 1. Master on/off -->
+      <div class="row">
+        <div>
+          <div class="row__label">Summarize my feed</div>
+          <div class="row__hint" id="enabledHint">On — collapsing the slop.</div>
+        </div>
+        <button class="switch" id="enabledSwitch" type="button" role="switch" aria-label="Summarize my feed"><span></span></button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- 2. Snark level -->
+      <div>
+        <div class="row__label seg-label">Snark level</div>
+        <div class="seg" id="toneSeg">
+          <button type="button" data-tone="facts">Just the facts</button>
+          <button type="button" data-tone="brutal">Brutally honest</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- 3. Theme -->
+      <div>
+        <div class="row__label seg-label">Theme</div>
+        <div class="swatches" id="swatches"></div>
+      </div>
+
+      <!-- 4. Summary card style -->
+      <div>
+        <div class="row__label seg-label">Summary card</div>
+        <div class="seg" id="cardStyleSeg">
+          <button type="button" data-card="filled">Filled</button>
+          <button type="button" data-card="outline">Outline</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- 5. AI provider + key -->
+      <div class="field">
+        <label>AI provider <span class="muted">· one key at a time</span></label>
+        <select class="provider-select" id="providerSelect"></select>
+        <div class="keyrow">
+          <input type="password" id="keyInput" autocomplete="off" spellcheck="false" />
+          <button class="save" id="saveKey" type="button">Save</button>
+        </div>
+        <div class="keystat" id="keyStat"></div>
+      </div>
+
+      <!-- 6. Session counter -->
+      <div class="counter">
+        <div class="counter__num" id="counterNum">0</div>
+        <div class="counter__lbl"><b>posts you didn't<br />have to read</b> this session</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
