@@ -325,7 +325,9 @@
     scanTimer = setTimeout(() => { scanTimer = null; scan(); }, 300);
   }
   function startObserver() {
-    const target = document.querySelector(SEL.feed) || document.body;
+    // observe the whole document — LinkedIn renders posts outside any single
+    // "feed" container, and the node varies; scans are debounced so this is cheap
+    const target = document.body || document.documentElement;
     observer = new MutationObserver(() => scheduleScan());
     observer.observe(target, { childList: true, subtree: true });
   }
@@ -374,6 +376,8 @@
 
     startObserver();
     scan();
+    // catch posts that stream in just after load, independent of the observer
+    [600, 1500, 3000, 6000].forEach((ms) => setTimeout(() => { if (ctxValid()) scan(); }, ms));
 
     document.documentElement.dataset.iaratEnabled = String(settings.enabled);
     console.info(`[iarat] ready — enabled=${settings.enabled}, textBoxes=${document.querySelectorAll(SEL.textBox).length}, cards=${document.querySelectorAll(".iarat-summary").length}`);
