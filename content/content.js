@@ -345,22 +345,38 @@
     }
   });
 
+  // callback-form get (always fires) wrapped so it can never reject…
+  function getStore(area, keys) {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage[area].get(keys, (res) => {
+          resolve(chrome.runtime.lastError ? {} : res || {});
+        });
+      } catch (_) { resolve({}); }
+    });
+  }
+  // …and a timeout so a slow/starved storage backend never blocks injection
+  function withTimeout(p, ms) {
+    return Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
+  }
+
   async function init() {
     const [sync, local] = await Promise.all([
-      chrome.storage.sync.get(["enabled", "tone", "accent", "cardStyle"]),
-      chrome.storage.local.get([CACHE_KEY]),
+      withTimeout(getStore("sync", ["enabled", "tone", "accent", "cardStyle"]), 1500),
+      withTimeout(getStore("local", [CACHE_KEY]), 1500),
     ]);
-    settings.enabled = sync.enabled ?? true;
-    settings.tone = sync.tone ?? "brutal";
-    settings.accent = sync.accent ?? DEFAULT_ACCENT.slice();
-    settings.cardStyle = sync.cardStyle ?? "filled";
-    memCache = local[CACHE_KEY] || {};
+    const s = sync || {}, l = local || {};
+    settings.enabled = s.enabled ?? true;
+    settings.tone = s.tone ?? "brutal";
+    settings.accent = s.accent ?? DEFAULT_ACCENT.slice();
+    settings.cardStyle = s.cardStyle ?? "filled";
+    memCache = l[CACHE_KEY] || {};
 
     startObserver();
     scan();
 
     document.documentElement.dataset.iaratEnabled = String(settings.enabled);
-    console.info(`[iarat] ready — enabled=${settings.enabled}, textBoxes=${document.querySelectorAll(SEL.textBox).length}`);
+    console.info(`[iarat] ready — enabled=${settings.enabled}, textBoxes=${document.querySelectorAll(SEL.textBox).length}, cards=${document.querySelectorAll(".iarat-summary").length}`);
   }
 
   init().catch((e) => {
