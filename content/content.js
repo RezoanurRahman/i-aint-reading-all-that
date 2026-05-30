@@ -16,7 +16,9 @@
     // text box directly — no fragile post-wrapper selector needed.
     // Old class names are kept as fallbacks for the legacy feed.
     textBox: '[data-testid="expandable-text-box"], .feed-shared-update-v2__description, .update-components-text',
-    seeMore: '[data-testid="expandable-text-button"], button.feed-shared-inline-show-more-text__see-more-less-toggle',
+    // buttons that mark a post's social action bar — used to bound the region
+    // we collapse (everything above the bar, below the header, gets hidden)
+    actionButton: 'button[aria-label*="comment" i], button[aria-label*="react" i], button[aria-label*="repost" i], button[aria-label*="like" i], button[aria-label*="send" i]',
     // container to observe for infinite scroll; falls back to main/body
     feed: '[data-testid="mainFeed"], .scaffold-finite-scroll__content, main',
   };
@@ -196,13 +198,14 @@
     return { root, textEl, btn, btnLabel, saved };
   }
 
-  function wireToggle(parts, box, extra) {
+  function wireToggle(parts, hiddenEls) {
     parts.btn.addEventListener("click", () => {
-      const expanded = box.classList.toggle("iarat-collapsed") === false;
-      if (extra) extra.classList.toggle("iarat-collapsed", !expanded);
-      parts.btn.classList.toggle("iarat-open", expanded);
-      parts.btnLabel.textContent = expanded ? "ok that's enough" : "read all that (if you must)";
-      parts.saved.classList.toggle("iarat-hidden", expanded); // saved time only while collapsed
+      const collapsed = hiddenEls[0] && hiddenEls[0].classList.contains("iarat-collapsed");
+      const expand = collapsed; // currently collapsed -> expand on click
+      hiddenEls.forEach((el) => el.classList.toggle("iarat-collapsed", !expand));
+      parts.btn.classList.toggle("iarat-open", expand);
+      parts.btnLabel.textContent = expand ? "ok that's enough" : "read all that (if you must)";
+      parts.saved.classList.toggle("iarat-hidden", expand); // saved time only while collapsed
     });
   }
 
@@ -256,6 +259,31 @@
   /* ============================================================
      per-post processing
      ============================================================ */
+  // nearest ancestor of the text box that holds the post's social action bar
+  function findPostRoot(box) {
+    let el = box.parentElement;
+    for (let hops = 0; el && hops < 15; hops++, el = el.parentElement) {
+      if (el.querySelector(SEL.actionButton)) return el;
+    }
+    return null;
+  }
+
+  // the run of post children to hide: from the block holding the text down to
+  // (not including) the social action bar — text + image + embeds + counts.
+  // Header sits above this run, action bar below; both stay visible.
+  function collapseRegion(box) {
+    const postRoot = findPostRoot(box);
+    if (!postRoot) return null;
+    const children = Array.from(postRoot.children);
+    const start = children.findIndex((c) => c.contains(box));
+    if (start === -1) return null;
+    let end = children.length;
+    for (let i = start + 1; i < children.length; i++) {
+      if (children[i].querySelector(SEL.actionButton)) { end = i; break; }
+    }
+    return { postRoot, anchor: children[start], hidden: children.slice(start, end) };
+  }
+
   async function processPost(box) {
     if (!settings.enabled || box.dataset.iaratDone || !box.parentNode) return;
 
@@ -265,16 +293,21 @@
     box.dataset.iaratDone = "1";
     const h = hashText(text);
 
-    // a "…more" toggle living OUTSIDE the text box must be hidden alongside it
-    const sm = box.parentElement ? box.parentElement.querySelector(SEL.seeMore) : null;
-    const extraHide = sm && !box.contains(sm) ? sm : null;
-
     const meta = { flag: flagFor(text), aiScore: aiScore(text), savedTime: readTime(text) };
     const parts = buildCard(meta);
-    box.parentNode.insertBefore(parts.root, box);
-    box.classList.add("iarat-collapsed");
-    if (extraHide) extraHide.classList.add("iarat-collapsed");
-    wireToggle(parts, box, extraHide);
+
+    // hide the whole post body (text + image/embeds), not just the text
+    const region = collapseRegion(box);
+    let hiddenEls;
+    if (region && region.hidden.length) {
+      region.postRoot.insertBefore(parts.root, region.anchor);
+      hiddenEls = region.hidden;
+    } else {
+      box.parentNode.insertBefore(parts.root, box); // fallback: text only
+      hiddenEls = [box];
+    }
+    hiddenEls.forEach((el) => el.classList.add("iarat-collapsed"));
+    wireToggle(parts, hiddenEls);
 
     if (!countedThisSession.has(h)) { countedThisSession.add(h); bumpCounter(); }
 
