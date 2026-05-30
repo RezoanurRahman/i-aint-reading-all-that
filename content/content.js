@@ -120,20 +120,10 @@
   /* ============================================================
      summary card
      ============================================================ */
-  /* Load the bundled fonts via getURL() so the URLs resolve to a valid
-     chrome-extension:// origin. (Relative url() in manifest-injected CSS
-     resolves to chrome-extension://invalid/ and spams ERR_FAILED.) */
-  function injectFonts() {
-    if (!chrome.runtime || !chrome.runtime.id) return; // context invalidated
-    if (document.getElementById("iarat-fonts")) return;
-    const u = (p) => chrome.runtime.getURL(p);
-    const style = document.createElement("style");
-    style.id = "iarat-fonts";
-    style.textContent = `
-@font-face{font-family:"Bricolage Grotesque";font-style:normal;font-weight:400 800;font-display:swap;src:url("${u("fonts/bricolage-latin.woff2")}") format("woff2");}
-@font-face{font-family:"Space Mono";font-style:normal;font-weight:400;font-display:swap;src:url("${u("fonts/spacemono-400.woff2")}") format("woff2");}
-@font-face{font-family:"Space Mono";font-style:normal;font-weight:700;font-display:swap;src:url("${u("fonts/spacemono-700.woff2")}") format("woff2");}`;
-    (document.head || document.documentElement).appendChild(style);
+  /* true while our extension context is alive; false once orphaned by a
+     reload/update, which is when chrome.* calls start to fail */
+  function ctxValid() {
+    return !!(chrome.runtime && chrome.runtime.id);
   }
 
   function applyTheme(root) {
@@ -226,6 +216,7 @@
      ============================================================ */
   function requestSummary(text) {
     return new Promise((resolve) => {
+      if (!ctxValid()) { resolve({ ok: false, error: "context invalidated" }); return; }
       try {
         chrome.runtime.sendMessage({ type: "summarize", text, tone: settings.tone }, (resp) => {
           if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
@@ -237,6 +228,7 @@
     });
   }
   function bumpCounter() {
+    if (!ctxValid()) return;
     try { chrome.runtime.sendMessage({ type: "count" }); } catch (_) {}
   }
 
@@ -296,6 +288,7 @@
   }
 
   function scan() {
+    if (!ctxValid()) { teardown(); return; }
     if (!settings.enabled) return;
     document.querySelectorAll(SEL.textBox).forEach((box) => {
       if (!box.dataset.iaratDone) processPost(box);
@@ -317,14 +310,20 @@
      observer (virtualized, infinite-scroll feed)
      ============================================================ */
   let scanTimer = null;
+  let observer = null;
+  function teardown() {
+    if (observer) { observer.disconnect(); observer = null; }
+    if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+  }
   function scheduleScan() {
+    if (!ctxValid()) { teardown(); return; } // orphaned — stop doing work
     if (scanTimer) return;
     scanTimer = setTimeout(() => { scanTimer = null; scan(); }, 300);
   }
   function startObserver() {
     const target = document.querySelector(SEL.feed) || document.body;
-    const obs = new MutationObserver(() => scheduleScan());
-    obs.observe(target, { childList: true, subtree: true });
+    observer = new MutationObserver(() => scheduleScan());
+    observer.observe(target, { childList: true, subtree: true });
   }
 
   /* ============================================================
@@ -353,7 +352,6 @@
     settings.cardStyle = sync.cardStyle ?? "filled";
     memCache = local[CACHE_KEY] || {};
 
-    injectFonts();
     startObserver();
     scan();
   }

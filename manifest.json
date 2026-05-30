@@ -22,14 +22,8 @@
     {
       "matches": ["https://www.linkedin.com/feed/*", "https://www.linkedin.com/*"],
       "js": ["content/content.js"],
-      "css": ["content/content.css"],
+      "css": ["content/fonts-data.css", "content/content.css"],
       "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["fonts/bricolage-latin.woff2", "fonts/spacemono-400.woff2", "fonts/spacemono-700.woff2"],
-      "matches": ["https://www.linkedin.com/*"]
     }
   ],
   "icons": {
