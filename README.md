@@ -112,6 +112,22 @@ service-worker.js → sendResponse → content.js renders the card
 
 Vanilla JS + CSS, no build step.
 
+## How it was built
+
+- Designed and built with Claude. The design came first: Claude generated the HTML/React prototype and a Manifest V3 build brief (file layout, design tokens, the four provider request shapes).
+- Claude Code built the extension from that brief in about five hours, tested against a live LinkedIn feed.
+- Most of that time went to one problem: LinkedIn's feed uses scrambled, hashed class names now, so normal selectors are dead on arrival. The stable `data-testid` hooks turned up by poking at the live DOM in the console.
+- Other bugs only showed up on the real site: fonts failing as `chrome-extension://invalid/`, a storage call that hung and froze the script, an observer watching the wrong node.
+- No build step, no framework, no dependencies. Just vanilla Manifest V3 that loads as-is.
+
+Tools:
+
+- Claude — design (HTML/React prototype + build brief)
+- Claude Code — built the extension
+- Chrome DevTools — testing and selector hunting
+- Google Fonts — Bricolage Grotesque, Space Mono
+- git / GitHub — version control
+
 ## Notes
 
 - **DOM selectors are brittle.** LinkedIn renames/obfuscates feed classes often,
