@@ -7,15 +7,14 @@
 
   /* ---- brittle DOM selectors — keep them all in one place ---- */
   const SEL = {
-    post: "div.feed-shared-update-v2",
-    // first match wins; LinkedIn renames these often
-    textContainers: [
-      ".feed-shared-update-v2__description",
-      ".update-components-text",
-      ".feed-shared-inline-show-more-text",
-    ],
-    // container to observe for infinite scroll; falls back to body
-    feed: ".scaffold-finite-scroll__content, main",
+    // LinkedIn's rebuilt feed ships hashed CSS classes (e.g. "_01ed4f4a"),
+    // so we anchor on stable data-testid hooks. We operate on the post's
+    // text box directly — no fragile post-wrapper selector needed.
+    // Old class names are kept as fallbacks for the legacy feed.
+    textBox: '[data-testid="expandable-text-box"], .feed-shared-update-v2__description, .update-components-text',
+    seeMore: '[data-testid="expandable-text-button"], button.feed-shared-inline-show-more-text__see-more-less-toggle',
+    // container to observe for infinite scroll; falls back to main/body
+    feed: '[data-testid="mainFeed"], .scaffold-finite-scroll__content, main',
   };
 
   const MIN_TEXT_LEN = 15;
@@ -112,13 +111,6 @@
   /* ============================================================
      text extraction
      ============================================================ */
-  function findTextContainer(postEl) {
-    for (const s of SEL.textContainers) {
-      const el = postEl.querySelector(s);
-      if (el) return el;
-    }
-    return null;
-  }
   function extractText(container) {
     let t = (container.innerText || container.textContent || "").replace(/\s+/g, " ").trim();
     t = t.replace(/\s*(…\s*more|see more|…more|more)$/i, "").trim();
@@ -194,9 +186,10 @@
     return { root, textEl, btn, btnLabel, saved };
   }
 
-  function wireToggle(parts, container) {
+  function wireToggle(parts, box, extra) {
     parts.btn.addEventListener("click", () => {
-      const expanded = container.classList.toggle("iarat-collapsed") === false;
+      const expanded = box.classList.toggle("iarat-collapsed") === false;
+      if (extra) extra.classList.toggle("iarat-collapsed", !expanded);
       parts.btn.classList.toggle("iarat-open", expanded);
       parts.btnLabel.textContent = expanded ? "ok that's enough" : "read all that (if you must)";
       parts.saved.classList.toggle("iarat-hidden", expanded); // saved time only while collapsed
@@ -251,22 +244,25 @@
   /* ============================================================
      per-post processing
      ============================================================ */
-  async function processPost(postEl) {
-    if (!settings.enabled || postEl.dataset.iaratDone) return;
+  async function processPost(box) {
+    if (!settings.enabled || box.dataset.iaratDone || !box.parentNode) return;
 
-    const container = findTextContainer(postEl);
-    if (!container) { postEl.dataset.iaratDone = "skip"; return; }
-    const text = extractText(container);
-    if (text.length < MIN_TEXT_LEN) { postEl.dataset.iaratDone = "skip"; return; }
+    const text = extractText(box);
+    if (text.length < MIN_TEXT_LEN) { box.dataset.iaratDone = "skip"; return; }
 
-    postEl.dataset.iaratDone = "1";
+    box.dataset.iaratDone = "1";
     const h = hashText(text);
+
+    // a "…more" toggle living OUTSIDE the text box must be hidden alongside it
+    const sm = box.parentElement ? box.parentElement.querySelector(SEL.seeMore) : null;
+    const extraHide = sm && !box.contains(sm) ? sm : null;
 
     const meta = { flag: flagFor(text), aiScore: aiScore(text), savedTime: readTime(text) };
     const parts = buildCard(meta);
-    container.parentNode.insertBefore(parts.root, container);
-    container.classList.add("iarat-collapsed");
-    wireToggle(parts, container);
+    box.parentNode.insertBefore(parts.root, box);
+    box.classList.add("iarat-collapsed");
+    if (extraHide) extraHide.classList.add("iarat-collapsed");
+    wireToggle(parts, box, extraHide);
 
     if (!countedThisSession.has(h)) { countedThisSession.add(h); bumpCounter(); }
 
@@ -285,8 +281,8 @@
 
   function scan() {
     if (!settings.enabled) return;
-    document.querySelectorAll(SEL.post).forEach((p) => {
-      if (!p.dataset.iaratDone) processPost(p);
+    document.querySelectorAll(SEL.textBox).forEach((box) => {
+      if (!box.dataset.iaratDone) processPost(box);
     });
   }
 
