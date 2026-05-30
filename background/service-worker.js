@@ -23,14 +23,19 @@ const DEMO = [
   "This is a placeholder. Your key turns it into honest one-line shade.",
 ];
 
+/* per-mode voice — drives the TL;DR personality (see the Modes in the popup) */
+const TONE_FLAVOR = {
+  facts: "neutral and factual — just report what the post actually says, no opinion or jokes",
+  brutal: "a deadpan executioner: dry, cold, and savagely honest. State the ugly truth flatly, with contempt and zero patience. Call out humble-brags, engagement bait, and fake-vulnerable hustle takes by name. Cutting, never cruel about identity — punch at the post, not the person",
+  sassy: "a theatrical messy-friend reading the post for filth: camp, eye-rolling, gossipy, mock-scandalized. Use playful shade and delight in the drama (a pet name like 'bestie' is fine). Witty, not mean — no slurs",
+};
+
 function systemPrompt(tone) {
-  const flavor = tone === "brutal"
-    ? "savage, sarcastic, and openly mocking — roast the post with dry contempt, ridicule humble-brags, engagement bait, and fake-vulnerable hustle takes; be witty and cutting, never polite or encouraging"
-    : "neutral and factual";
+  const flavor = TONE_FLAVOR[tone] || TONE_FLAVOR.facts;
   return [
     "You read a LinkedIn post and reply with ONLY a JSON object — no prose, no code fences:",
     '{"tldr": string, "category": string, "ai": number}',
-    `- tldr: ONE sentence summarizing the post, ${flavor}. Max 18 words. No emojis, no hashtags.`,
+    `- tldr: ONE sentence summarizing the post. Voice: ${flavor}. Max 18 words. No emojis, no hashtags.`,
     '- category: a 1-3 word lowercase label for the post\'s archetype (e.g. "humble-brag", "engagement bait", "toxic hustle", "fake-vulnerable", "crying-ceo", "thought leader", "genuine").',
     "- ai: integer 0-100, how likely the post text is AI-generated.",
   ].join("\n");
@@ -161,7 +166,7 @@ async function summarize(text, tone) {
   if (!cfg) return { ok: false, error: `Unknown provider: ${activeProvider}` };
 
   const sys = systemPrompt(tone);
-  const temp = tone === "brutal" ? 0.95 : 0.4; // spicier for snark, steadier for facts
+  const temp = tone === "facts" ? 0.4 : 0.95; // spicier for brutal & sassy, steadier for facts
   const { url, init } = buildRequest(cfg, key, sys, clipped, temp);
 
   try {

@@ -14,8 +14,12 @@ you can see the UI.
   collapses behind a toggle.
 - **Whole-post collapse** — hides text, images, and embeds, leaving the author
   header, the summary card, and the Like/Comment bar.
-- **Snark level** — `Just the facts` or `Brutally honest`.
-- **Themes** — Electric violet, Teal, Hot magenta, Graphite.
+- **Snark level** — three voices: `📋 Facts` (neutral, factual), `🔥 Brutal`
+  (deadpan, savage), `💅 Sassy` (camp, eye-rolling). Sets the prompt tone, the
+  card's mode chip, and the default theme color.
+- **Themes** — Electric violet, Teal, Hot magenta, Graphite. Each snark level
+  picks a default (Facts → Graphite, Brutal → violet, Sassy → magenta); switch
+  swatches anytime to override.
 - **Card style** — Filled or Outline.
 - **Flag + AI-likelihood chips** (e.g. `🚩 engagement bait`, `🤖 60% AI`) — the
   category and AI-likelihood come from the model alongside the summary.
@@ -44,8 +48,11 @@ Click the toolbar icon to open the popup:
 
 1. **Summarize my feed** — master on/off. Flipping it injects/removes all cards
    live.
-2. **Snark level** — controls the prompt tone.
-3. **Theme** — recolors the popup and injected cards.
+2. **Snark level** — `📋 Facts`, `🔥 Brutal`, or `💅 Sassy`. Sets the prompt
+   voice, the card's mode chip, and switches the theme to that level's default
+   color.
+3. **Theme** — recolors the popup and injected cards. Snark picks a default per
+   level; pick any swatch to override.
 4. **Summary card** — Filled or Outline.
 5. **AI provider** — pick one, paste its API key, and hit **Save**. Keys are
    stored per provider; only the selected one is used.
@@ -87,7 +94,7 @@ service-worker.js → sendResponse → content.js renders the card
 
 ## State (`chrome.storage`)
 
-- **sync:** `enabled`, `tone` (`facts` | `brutal`), `accent` (4-color array),
+- **sync:** `enabled`, `tone` (`facts` | `brutal` | `sassy`), `accent` (4-color array),
   `cardStyle` (`filled` | `outline`), `provider`
 - **local:** `keys` ({ deepseek, openai, claude, gemini }), `summaryCache`
   ({ hash: tldr }), `sessionCount`
@@ -131,6 +138,10 @@ Tools:
 
 ## Notes
 
+- **Main feed only.** The content script runs on `https://www.linkedin.com/feed/`
+  and nowhere else. On other LinkedIn pages it stays dormant — and since
+  LinkedIn is a SPA, it also stands down (removing any injected cards) if you
+  navigate away from the feed without a full reload.
 - **DOM selectors are brittle.** LinkedIn renames/obfuscates feed classes often,
   so the extension anchors on `data-testid` hooks (e.g.
   `[data-testid="expandable-text-box"]`). All selectors live in one `SEL` object

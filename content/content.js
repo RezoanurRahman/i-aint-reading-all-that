@@ -23,7 +23,17 @@
   const CACHE_KEY = "summaryCache";
   const CACHE_CAP = 1000;
   const DEFAULT_ACCENT = ["#6D4AFF", "#5331E6", "#F1EEFF", "#E0D9FF"];
-  const BRAND = "TL;DR — I ain't reading all that";
+  const BRAND = "I ain't reading all that";
+
+  // each snark mode shows an icon + label chip. The card's color follows the
+  // active theme (the popup picks a default theme per mode, user-overridable),
+  // so the Theme swatches re-tint every card regardless of snark level.
+  const MODES = {
+    facts:  { short: "Facts",  icon: "📋" },
+    brutal: { short: "Brutal", icon: "🔥" },
+    sassy:  { short: "Sassy",  icon: "💅" },
+  };
+  const modeFor = (tone) => MODES[tone] || MODES.brutal;
 
   const settings = {
     enabled: true,
@@ -157,13 +167,17 @@
     const brand = document.createElement("span");
     brand.className = "iarat-summary__brand";
     brand.textContent = BRAND;
+    const mode = document.createElement("span");
+    mode.className = "iarat-summary__mode";
+    const M = modeFor(settings.tone);
+    mode.textContent = `${M.icon} ${M.short}`;
     const flags = document.createElement("div");
     flags.className = "iarat-summary__flags";
     const ai = document.createElement("span");
     ai.className = "iarat-chip iarat-chip--ai";
     ai.textContent = "🤖 …";
     flags.append(ai);
-    top.append(logo, brand, flags);
+    top.append(logo, brand, mode, flags);
 
     root.append(textEl, foot, top);
     applyTheme(root);
@@ -305,9 +319,17 @@
     }
   }
 
+  // only operate on the main feed; LinkedIn is a SPA, so a content script
+  // injected on /feed/ stays alive across client-side nav to profiles, jobs,
+  // etc. — bail (and clean up) anywhere that isn't /feed or /feed/.
+  function onFeed() {
+    return /^\/feed\/?$/.test(location.pathname);
+  }
+
   function scan() {
     if (!ctxValid()) { teardown(); return; }
     if (!settings.enabled) return;
+    if (!onFeed()) { removeAll(); return; }
     document.querySelectorAll(SEL.textBox).forEach((box) => {
       if (!box.dataset.iaratDone) processPost(box);
     });

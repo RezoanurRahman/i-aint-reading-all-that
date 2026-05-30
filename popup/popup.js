@@ -10,6 +10,14 @@ const THEMES = {
   "Graphite":        ["#3C3A44", "#26252C", "#F0EFF2", "#E0DEE5"],
 };
 
+/* default theme per snark level — switching snark switches the theme to this
+   (the user can still pick any swatch afterward to override) */
+const MODE_THEME = {
+  facts:  THEMES["Graphite"],        // black
+  brutal: THEMES["Electric violet"], // purple
+  sassy:  THEMES["Hot magenta"],     // pink
+};
+
 /* one key active at a time */
 const PROVIDERS = {
   deepseek: { name: "DeepSeek",           model: "deepseek-chat",          placeholder: "sk-••••••••••••••••" },
@@ -62,7 +70,7 @@ function reloadActiveLinkedInTab() {
   if (typeof chrome === "undefined" || !chrome.tabs) return;
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tab = tabs && tabs[0];
-    if (tab && tab.id != null && /^https:\/\/www\.linkedin\.com\//.test(tab.url || "")) {
+    if (tab && tab.id != null && /^https:\/\/www\.linkedin\.com\/feed\/?(\?|#|$)/.test(tab.url || "")) {
       chrome.tabs.reload(tab.id);
     }
   });
@@ -158,8 +166,15 @@ function wireEvents() {
     const btn = e.target.closest("button");
     if (!btn || btn.dataset.tone === state.tone) return;
     state.tone = btn.dataset.tone;
+    // each snark level switches the theme to its default color
+    const themed = MODE_THEME[state.tone];
+    if (themed) {
+      state.accent = themed;
+      applyAccent(state.accent);
+      renderSwatches();
+    }
     renderTone();
-    syncSet({ tone: state.tone });
+    syncSet({ tone: state.tone, accent: state.accent });
     // re-summarize the visible feed at the new snark level (cache is tone-keyed)
     reloadActiveLinkedInTab();
   });
