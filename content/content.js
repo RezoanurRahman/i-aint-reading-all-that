@@ -5,10 +5,6 @@
 (() => {
   "use strict";
 
-  // debug markers, readable from the page console (isolated-world safe)
-  console.info("[iarat] content script loaded");
-  document.documentElement.dataset.iaratLoaded = "1";
-
   /* ---- brittle DOM selectors — keep them all in one place ---- */
   const SEL = {
     // LinkedIn's rebuilt feed ships hashed CSS classes (e.g. "_01ed4f4a"),
@@ -411,13 +407,7 @@
     scan();
     // catch posts that stream in just after load, independent of the observer
     [600, 1500, 3000, 6000].forEach((ms) => setTimeout(() => { if (ctxValid()) scan(); }, ms));
-
-    document.documentElement.dataset.iaratEnabled = String(settings.enabled);
-    console.info(`[iarat] ready — enabled=${settings.enabled}, textBoxes=${document.querySelectorAll(SEL.textBox).length}, cards=${document.querySelectorAll(".iarat-summary").length}`);
   }
 
-  init().catch((e) => {
-    document.documentElement.dataset.iaratError = String((e && e.message) || e);
-    console.warn("[iarat] init failed:", e);
-  });
+  init().catch(() => {});
 })();
