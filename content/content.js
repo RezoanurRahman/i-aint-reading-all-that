@@ -120,6 +120,22 @@
   /* ============================================================
      summary card
      ============================================================ */
+  /* Load the bundled fonts via getURL() so the URLs resolve to a valid
+     chrome-extension:// origin. (Relative url() in manifest-injected CSS
+     resolves to chrome-extension://invalid/ and spams ERR_FAILED.) */
+  function injectFonts() {
+    if (!chrome.runtime || !chrome.runtime.id) return; // context invalidated
+    if (document.getElementById("iarat-fonts")) return;
+    const u = (p) => chrome.runtime.getURL(p);
+    const style = document.createElement("style");
+    style.id = "iarat-fonts";
+    style.textContent = `
+@font-face{font-family:"Bricolage Grotesque";font-style:normal;font-weight:400 800;font-display:swap;src:url("${u("fonts/bricolage-latin.woff2")}") format("woff2");}
+@font-face{font-family:"Space Mono";font-style:normal;font-weight:400;font-display:swap;src:url("${u("fonts/spacemono-400.woff2")}") format("woff2");}
+@font-face{font-family:"Space Mono";font-style:normal;font-weight:700;font-display:swap;src:url("${u("fonts/spacemono-700.woff2")}") format("woff2");}`;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
   function applyTheme(root) {
     const [a, d, t1, t2] = settings.accent;
     root.style.setProperty("--accent", a);
@@ -337,6 +353,7 @@
     settings.cardStyle = sync.cardStyle ?? "filled";
     memCache = local[CACHE_KEY] || {};
 
+    injectFonts();
     startObserver();
     scan();
   }

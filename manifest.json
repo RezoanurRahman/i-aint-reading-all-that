@@ -22,7 +22,7 @@
     {
       "matches": ["https://www.linkedin.com/feed/*", "https://www.linkedin.com/*"],
       "js": ["content/content.js"],
-      "css": ["fonts/fonts.css", "content/content.css"],
+      "css": ["content/content.css"],
       "run_at": "document_idle"
     }
   ],
