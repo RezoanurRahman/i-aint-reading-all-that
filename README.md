@@ -17,10 +17,11 @@ you can see the UI.
 - **Snark level** — `Just the facts` or `Brutally honest`.
 - **Themes** — Electric violet, Teal, Hot magenta, Graphite.
 - **Card style** — Filled or Outline.
-- **Flag + AI-likelihood chips** (e.g. `🚩 engagement bait`, `🤖 60% AI`) from a
-  cheap client-side heuristic — no extra tokens.
-- **Caching** — summaries are cached by a hash of the post text in
-  `chrome.storage.local`, so re-scrolling the same post doesn't re-summarize.
+- **Flag + AI-likelihood chips** (e.g. `🚩 engagement bait`, `🤖 60% AI`) — the
+  category and AI-likelihood come from the model alongside the summary.
+- **Caching** — summaries are cached by a hash of the post text *and* the snark
+  level in `chrome.storage.local`, so re-scrolling the same post doesn't
+  re-summarize, while switching snark level yields fresh takes.
 - **Session counter** — "posts you didn't have to read this session."
 - **Bundled fonts** (Bricolage Grotesque + Space Mono) embedded as `data:` URIs;
   works offline, no external requests.

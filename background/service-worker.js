@@ -1,10 +1,11 @@
 /* service-worker.js — the only place that talks to an AI provider.
    Keeps the user's key off the LinkedIn page and sidesteps CORS.
    Messages:
-     { type: "summarize", text, tone }  -> { ok, tldr } | { ok:false, error }
+     { type: "summarize", text, tone }  -> { ok, tldr, category, ai } | { ok:false, error }
      { type: "count" }                  -> increments local.sessionCount  */
 
 const MAX_INPUT_CHARS = 4000;
+const MAX_OUTPUT_TOKENS = 256; // room for the JSON envelope, not just the sentence
 
 /* endpoint / auth / model per provider (request shapes differ) */
 const PROVIDERS = {
@@ -14,7 +15,7 @@ const PROVIDERS = {
   gemini:   { kind: "gemini", url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent", model: "gemini-2.0-flash" },
 };
 
-/* canned lines shown when the user has no key yet (demo mode) */
+/* canned cards shown when the user has no key yet (demo mode) */
 const DEMO = [
   "Add an API key in the popup and this becomes a real, brutal TL;DR.",
   "Demo mode: someone said a lot of words to say almost nothing.",
@@ -24,9 +25,15 @@ const DEMO = [
 
 function systemPrompt(tone) {
   const flavor = tone === "brutal"
-    ? "brutally honest, dry, and a little snarky — call out humble-brags, engagement bait, and fake-vulnerable hustle takes"
+    ? "savage, sarcastic, and openly mocking — roast the post with dry contempt, ridicule humble-brags, engagement bait, and fake-vulnerable hustle takes; be witty and cutting, never polite or encouraging"
     : "neutral and factual";
-  return `Summarize this LinkedIn post in ONE sentence. Be ${flavor}. Max 18 words. No emojis, no hashtags.`;
+  return [
+    "You read a LinkedIn post and reply with ONLY a JSON object — no prose, no code fences:",
+    '{"tldr": string, "category": string, "ai": number}',
+    `- tldr: ONE sentence summarizing the post, ${flavor}. Max 18 words. No emojis, no hashtags.`,
+    '- category: a 1-3 word lowercase label for the post\'s archetype (e.g. "humble-brag", "engagement bait", "toxic hustle", "fake-vulnerable", "crying-ceo", "thought leader", "genuine").',
+    "- ai: integer 0-100, how likely the post text is AI-generated.",
+  ].join("\n");
 }
 
 /* tidy any provider's output down to a clean one-liner */
@@ -38,6 +45,26 @@ function normalize(s) {
   out = out.replace(/#\w+/g, "");                        // hashtags
   out = out.replace(/\s+/g, " ").trim();
   return out;
+}
+
+function normalizeCategory(c) {
+  if (!c) return "";
+  return String(c).toLowerCase().replace(/["'`.]/g, "").replace(/\s+/g, " ").trim().slice(0, 28);
+}
+
+function clampAi(n) {
+  const x = Math.round(Number(n));
+  return Number.isFinite(x) ? Math.max(0, Math.min(100, x)) : null;
+}
+
+/* models sometimes wrap JSON in prose or ```fences; grab the first {...} block */
+function parseModelJson(raw) {
+  if (!raw) return null;
+  const s = String(raw);
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) return null;
+  try { return JSON.parse(s.slice(start, end + 1)); } catch (_) { return null; }
 }
 
 function cyrb53(str, seed = 0) {
@@ -53,7 +80,7 @@ function cyrb53(str, seed = 0) {
 }
 
 /* ---- build the request for the active provider ---- */
-function buildRequest(cfg, key, sys, text) {
+function buildRequest(cfg, key, sys, text, temp) {
   if (cfg.kind === "openai") {
     return {
       url: cfg.url,
@@ -63,8 +90,8 @@ function buildRequest(cfg, key, sys, text) {
         body: JSON.stringify({
           model: cfg.model,
           messages: [{ role: "system", content: sys }, { role: "user", content: text }],
-          temperature: 0.7,
-          max_tokens: 80,
+          temperature: temp,
+          max_tokens: MAX_OUTPUT_TOKENS,
         }),
       },
     };
@@ -82,7 +109,8 @@ function buildRequest(cfg, key, sys, text) {
         },
         body: JSON.stringify({
           model: cfg.model,
-          max_tokens: 80,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          temperature: Math.min(temp, 1), // Anthropic caps temperature at 1
           system: sys,
           messages: [{ role: "user", content: text }],
         }),
@@ -98,7 +126,7 @@ function buildRequest(cfg, key, sys, text) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: sys }] },
         contents: [{ role: "user", parts: [{ text }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 80 },
+        generationConfig: { temperature: temp, maxOutputTokens: MAX_OUTPUT_TOKENS },
       }),
     },
   };
@@ -126,14 +154,15 @@ async function summarize(text, tone) {
   if (!key) {
     // demo mode — stable line per post so it doesn't flicker on re-scroll
     const idx = cyrb53(clipped) % DEMO.length;
-    return { ok: true, tldr: DEMO[idx], demo: true };
+    return { ok: true, tldr: DEMO[idx], category: "demo mode", ai: null, demo: true };
   }
 
   const cfg = PROVIDERS[activeProvider];
   if (!cfg) return { ok: false, error: `Unknown provider: ${activeProvider}` };
 
   const sys = systemPrompt(tone);
-  const { url, init } = buildRequest(cfg, key, sys, clipped);
+  const temp = tone === "brutal" ? 0.95 : 0.4; // spicier for snark, steadier for facts
+  const { url, init } = buildRequest(cfg, key, sys, clipped, temp);
 
   try {
     const res = await fetch(url, init);
@@ -146,9 +175,12 @@ async function summarize(text, tone) {
       return { ok: false, error: `${activeProvider} ${res.status}${detail ? ": " + detail : ""}` };
     }
     const data = await res.json();
-    const tldr = normalize(parseResponse(cfg.kind, data));
+    const raw = parseResponse(cfg.kind, data);
+    const obj = parseModelJson(raw);
+    // fall back to the whole output as the sentence if the model skipped JSON
+    const tldr = normalize(obj?.tldr ?? raw);
     if (!tldr) return { ok: false, error: "Empty summary from provider" };
-    return { ok: true, tldr };
+    return { ok: true, tldr, category: normalizeCategory(obj?.category), ai: clampAi(obj?.ai) };
   } catch (e) {
     return { ok: false, error: `Network error: ${e && e.message ? e.message : e}` };
   }

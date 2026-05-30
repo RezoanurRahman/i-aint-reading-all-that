@@ -59,35 +59,12 @@
     return m ? `${m}m ${s}s` : `${s}s`;
   }
 
-  /* cheap client-side heuristics for the chips (no tokens spent).
-     README option (c): pattern-match the post text. */
-  function aiScore(text) {
-    const t = text.toLowerCase();
-    const emojis = (text.match(/\p{Extended_Pictographic}/gu) || []).length;
-    const lines = text.split(/\n|(?<=[.!?])\s+/).filter(Boolean);
-    const shortLineRatio = lines.length ? lines.filter((l) => l.trim().split(/\s+/).length <= 6).length / lines.length : 0;
-    let score = 55;
-    if (emojis >= 3) score += 12; else if (emojis >= 1) score += 5;
-    if (shortLineRatio > 0.5 && lines.length >= 5) score += 14; // broetry cadence
-    if (/\b(agree\?|thoughts\?|comment below|drop.{0,12}below|👇)/.test(t)) score += 10;
-    if (/\b(unpopular opinion|let that sink in|game ?changer|needle|synergy|thought leader|humbled|grateful|excited to announce)\b/.test(t)) score += 8;
-    if (/(\d[\.\)]\s|\d️⃣)/.test(text)) score += 6; // numbered list
-    if (/\b(dm me|comment ['"]?\w+|repost|tag (a|someone|three)|save this)\b/.test(t)) score += 8;
-    return Math.max(40, Math.min(99, Math.round(score))) + "% AI";
+  /* chip text from the AI's categorisation (filled once the summary returns) */
+  function flagChip(category) {
+    return "🚩 " + (category || "thought-leader");
   }
-
-  function flagFor(text) {
-    const t = text.toLowerCase();
-    const rules = [
-      [/cried in my car|i cried|tears/, "crying-CEO"],
-      [/work-life balance|never taken a day off|sleep is for|out-?work|burnout|grind|hustle/, "toxic hustle"],
-      [/comment ['"]?\w+|like this post|repost|tag (a|someone|three)|save this post|drop.{0,15}below|dm me|👇/, "engagement bait"],
-      [/noodles|broke|rock bottom|rejected|parking lot|食|instant noodle/, "fake-vulnerable"],
-      [/toddler|my \d+-year-old|my (kid|son|daughter)|nursery|blocks/, "toddler→biz pipeline"],
-      [/fired|let (him|her|them) go|laid off|layoff|hardest.{0,20}decision/, "humble-brag"],
-    ];
-    for (const [re, label] of rules) if (re.test(t)) return "🚩 " + label;
-    return "🚩 thought-leader";
+  function aiChip(ai) {
+    return "🤖 " + (ai == null ? "ai?" : ai + "% AI");
   }
 
   /* ============================================================
@@ -162,7 +139,7 @@
 
     const flag = document.createElement("span");
     flag.className = "iarat-chip iarat-chip--flag";
-    flag.textContent = meta.flag;
+    flag.textContent = "🚩 …";
 
     const saved = document.createElement("span");
     saved.className = "iarat-saved";
@@ -184,14 +161,14 @@
     flags.className = "iarat-summary__flags";
     const ai = document.createElement("span");
     ai.className = "iarat-chip iarat-chip--ai";
-    ai.textContent = "🤖 " + meta.aiScore;
+    ai.textContent = "🤖 …";
     flags.append(ai);
     top.append(logo, brand, flags);
 
     root.append(textEl, foot, top);
     applyTheme(root);
 
-    return { root, textEl, btn, btnLabel, saved };
+    return { root, textEl, btn, btnLabel, saved, flagEl: flag, aiEl: ai };
   }
 
   function wireToggle(parts, hiddenEls) {
@@ -208,6 +185,11 @@
   function setTldr(parts, tldr) {
     parts.textEl.classList.remove("iarat-pending");
     parts.textEl.textContent = tldr;
+  }
+  // fill the AI-sourced chips (category + AI-likelihood) from a summary result
+  function setMeta(parts, meta) {
+    parts.flagEl.textContent = flagChip(meta && meta.category);
+    parts.aiEl.textContent = aiChip(meta && meta.ai);
   }
   function setError(parts) {
     parts.textEl.classList.remove("iarat-pending");
@@ -287,10 +269,11 @@
     if (text.length < MIN_TEXT_LEN) { box.dataset.iaratDone = "skip"; return; }
 
     box.dataset.iaratDone = "1";
-    const h = hashText(text);
+    // cache + counter key includes the tone, so each snark level keeps its own
+    // summaries — switching tone then reloading re-summarizes instead of reusing.
+    const key = hashText(settings.tone + ":" + text);
 
-    const meta = { flag: flagFor(text), aiScore: aiScore(text), savedTime: readTime(text) };
-    const parts = buildCard(meta);
+    const parts = buildCard({ savedTime: readTime(text) });
 
     // hide the whole post body (text + image/embeds), not just the text
     const region = collapseRegion(box);
@@ -305,14 +288,16 @@
     hiddenEls.forEach((el) => el.classList.add("iarat-collapsed"));
     wireToggle(parts, hiddenEls);
 
-    if (!countedThisSession.has(h)) { countedThisSession.add(h); bumpCounter(); }
+    if (!countedThisSession.has(key)) { countedThisSession.add(key); bumpCounter(); }
 
-    if (memCache[h]) { setTldr(parts, memCache[h]); return; }
+    const cached = memCache[key];
+    if (cached) { setTldr(parts, cached.tldr); setMeta(parts, cached); return; }
 
     const resp = await enqueue(() => requestSummary(text));
     if (resp && resp.ok && resp.tldr) {
       setTldr(parts, resp.tldr);
-      memCache[h] = resp.tldr;
+      setMeta(parts, resp);
+      memCache[key] = { tldr: resp.tldr, category: resp.category, ai: resp.ai };
       cacheDirty = true;
       scheduleFlush();
     } else {

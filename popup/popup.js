@@ -56,6 +56,18 @@ function setSegOn(container, predicate) {
   });
 }
 
+/* reload the active tab if it's LinkedIn, so the feed re-summarizes with the
+   new setting. activeTab grants us the URL once the popup is open. */
+function reloadActiveLinkedInTab() {
+  if (typeof chrome === "undefined" || !chrome.tabs) return;
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs && tabs[0];
+    if (tab && tab.id != null && /^https:\/\/www\.linkedin\.com\//.test(tab.url || "")) {
+      chrome.tabs.reload(tab.id);
+    }
+  });
+}
+
 /* ---------- rendering ---------- */
 function renderEnabled() {
   $("enabledSwitch").classList.toggle("on", state.enabled);
@@ -144,10 +156,12 @@ function wireEvents() {
 
   $("toneSeg").addEventListener("click", (e) => {
     const btn = e.target.closest("button");
-    if (!btn) return;
+    if (!btn || btn.dataset.tone === state.tone) return;
     state.tone = btn.dataset.tone;
     renderTone();
     syncSet({ tone: state.tone });
+    // re-summarize the visible feed at the new snark level (cache is tone-keyed)
+    reloadActiveLinkedInTab();
   });
 
   $("cardStyleSeg").addEventListener("click", (e) => {
