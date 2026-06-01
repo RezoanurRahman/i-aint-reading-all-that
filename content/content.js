@@ -319,9 +319,10 @@
     }
   }
 
-  // only operate on the main feed; LinkedIn is a SPA, so a content script
-  // injected on /feed/ stays alive across client-side nav to profiles, jobs,
-  // etc. — bail (and clean up) anywhere that isn't /feed or /feed/.
+  // only operate on the main feed. LinkedIn is a SPA: the script is injected
+  // once on any linkedin.com page, then persists across client-side nav. We
+  // gate every action on /feed or /feed/ and bail (cleaning up) everywhere
+  // else — the root redirect, profiles, jobs, a single post, etc.
   function onFeed() {
     return /^\/feed\/?$/.test(location.pathname);
   }
@@ -351,20 +352,43 @@
      ============================================================ */
   let scanTimer = null;
   let observer = null;
+  let kickTimers = [];
+  let lastPath = location.pathname;
   function teardown() {
     if (observer) { observer.disconnect(); observer = null; }
     if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+    kickTimers.forEach(clearTimeout); kickTimers = [];
   }
   function scheduleScan() {
     if (!ctxValid()) { teardown(); return; } // orphaned — stop doing work
     if (scanTimer) return;
     scanTimer = setTimeout(() => { scanTimer = null; scan(); }, 300);
   }
+  // scan now + a short stagger, to catch posts that stream in just after the
+  // feed mounts — whether from a direct page load or a client-side nav into
+  // /feed/. Re-kicking clears any pending stagger so repeat navs don't pile up.
+  function kickScans() {
+    kickTimers.forEach(clearTimeout);
+    kickTimers = [600, 1500, 3000, 6000].map((ms) =>
+      setTimeout(() => { if (ctxValid()) scan(); }, ms));
+    scan();
+  }
+  // LinkedIn is a SPA: the content script is injected once (on whichever
+  // linkedin.com page loads first) and then the route changes client-side with
+  // no reload. Watch for the path flipping and (re)kick scanning when we land
+  // on /feed/ — the observer alone can miss the mount, and the initial stagger
+  // fired on whatever page we were injected on, not necessarily the feed.
+  function onPossibleNav() {
+    if (location.pathname === lastPath) return;
+    lastPath = location.pathname;
+    if (onFeed()) kickScans();
+    else removeAll();
+  }
   function startObserver() {
     // observe the whole document — LinkedIn renders posts outside any single
     // "feed" container, and the node varies; scans are debounced so this is cheap
     const target = document.body || document.documentElement;
-    observer = new MutationObserver(() => scheduleScan());
+    observer = new MutationObserver(() => { onPossibleNav(); scheduleScan(); });
     observer.observe(target, { childList: true, subtree: true });
   }
 
@@ -411,9 +435,8 @@
     memCache = l[CACHE_KEY] || {};
 
     startObserver();
-    scan();
-    // catch posts that stream in just after load, independent of the observer
-    [600, 1500, 3000, 6000].forEach((ms) => setTimeout(() => { if (ctxValid()) scan(); }, ms));
+    window.addEventListener("popstate", onPossibleNav); // back/forward nav
+    kickScans();
   }
 
   init().catch(() => {});
