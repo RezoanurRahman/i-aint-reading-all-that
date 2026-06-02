@@ -205,9 +205,11 @@
     parts.flagEl.textContent = flagChip(meta && meta.category);
     parts.aiEl.textContent = aiChip(meta && meta.ai);
   }
-  function setError(parts) {
+  function setError(parts, detail) {
     parts.textEl.classList.remove("iarat-pending");
-    parts.textEl.textContent = "Couldn't summarize this one. Check your API key in the popup.";
+    parts.textEl.textContent = detail
+      ? `Couldn't summarize: ${detail}`
+      : "Couldn't summarize this one. Check your API key in the popup.";
   }
 
   /* ============================================================
@@ -315,7 +317,7 @@
       cacheDirty = true;
       scheduleFlush();
     } else {
-      setError(parts);
+      setError(parts, resp && resp.error);
     }
   }
 
